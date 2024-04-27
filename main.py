@@ -26,27 +26,34 @@
 #     return {"text": out}
 
 
-
-
 from fastapi import FastAPI, File, UploadFile
-from fastapi.responses import JSONResponse
-import speech_recognition as sr
+import os
+import tempfile
+import wave
 
 app = FastAPI()
 
 @app.post("/audio")
 async def transcribe_audio(audio_file: UploadFile = File(...)):
     try:
-        r = sr.Recognizer()
-        with sr.WavFile(audio_file.file) as source:
-            audio = r.record(source)
+        # Save the uploaded file locally
+        with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+            tmp_file.write(await audio_file.read())
+            tmp_file_path = tmp_file.name
         
-        transcription = r.recognize_google(audio)  # You can use any other speech recognition method here
+        # Verify the format of the saved file
+        with wave.open(tmp_file_path, 'rb') as wav_file:
+            if wav_file.getnchannels() != 2 or wav_file.getsampwidth() != 2:
+                raise ValueError("Invalid WAV file format. Channels: {}, Sample Width: {}".format(wav_file.getnchannels(), wav_file.getsampwidth()))
+
+        # If format verification succeeds, proceed with transcription
+        # Add your transcription logic here
         
-        return {"transcription": transcription}
-    
-    except sr.AudioFileError as e:
-        return JSONResponse(status_code=400, content={"error": str(e)})
-    
+        return {"status": "success"}
+
     except Exception as e:
-        return JSONResponse(status_code=500, content={"error": "Failed to transcribe audio"})
+        return {"error": str(e)}
+    finally:
+        # Remove the temporary file
+        os.unlink(tmp_file_path)
+
